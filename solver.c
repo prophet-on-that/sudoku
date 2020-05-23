@@ -182,8 +182,16 @@ void print_puzzle(int puzzle[]) {
     }
     for (; count_printed < ROW_SIZE + 1; count_printed++)
       printf(" ");
-    if (i % ROW_SIZE == ROW_SIZE - 1)
+    int row = i / ROW_SIZE;
+    int col = i % ROW_SIZE;
+    if (col == ROW_SIZE - 1) {
       printf("\n");
+      if (row % PUZZLE_SIZE == PUZZLE_SIZE - 1)
+        printf("\n");
+    } else {
+      if (col % PUZZLE_SIZE == PUZZLE_SIZE - 1)
+        printf(" | ");
+    }
   }
 }
 
