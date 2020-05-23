@@ -21,7 +21,7 @@ int is_solved(int puzzle[]) {
   return 1;
 }
 
-void solve(int puzzle[]) {
+int solve(int puzzle[]) {
   while (1) {
     int changes = 0;
     for (int i = 0; i < PUZZLE_CELL_COUNT; i++) {
@@ -74,12 +74,28 @@ void solve(int puzzle[]) {
     }
     if (is_solved(puzzle)) {
       printf("We've solved the puzzle!\n");
-      return;
+      return 0;
     }
     if (changes == 0) {
       printf("Can't solve puzzle.\n");
-      return;
+      return 1;
     }
+  }
+}
+
+void print_puzzle(int puzzle[]) {
+  for (int i = 0; i < PUZZLE_CELL_COUNT; i++) { 
+    int count_printed = 0;
+    for (int j = 0; j < ROW_SIZE; j++) {
+      if ((1 << j) & puzzle[i]) {
+        printf("%d", j + 1);
+        ++count_printed;
+      }
+    }
+    for (; count_printed < ROW_SIZE + 1; count_printed++)
+      printf(" ");
+    if (i % ROW_SIZE == ROW_SIZE - 1)
+      printf("\n");
   }
 }
 
@@ -107,15 +123,9 @@ int main(void) {
     }
   }
 
-  solve(puzzle);
+  int ret = solve(puzzle);
 
-  for (int i = 0; i < 81; i++) {
-    for (int j = 0; j < 9; j++) {
-      if ((1 << j) & puzzle[i])
-        printf("%d", j + 1);
-    }
-    printf(" ");
-    if (i % 9 == 8)
-      printf("\n");
-  }
+  print_puzzle(puzzle);
+
+  exit(ret);
 }
