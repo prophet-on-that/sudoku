@@ -50,13 +50,26 @@ int *get_block_cell_indexes(int block) {
   return ret;
 }
 
+int is_possibility(int cell, int n) {
+  return cell & (1 << n);
+}
+
+/* Returns 1 if possibility removed, 0 if already removed. */
+int remove_possibility(int *cell, int n) {
+  if (is_possibility(*cell, n)) {
+    *cell &= ~(1 << n);
+    return 1;
+  }
+  return 0;
+}
+
 /* Returns the number of changes made to cells in the given set. */
 int rule_2_check(int puzzle[], int cell_indexes[]) {
   int changes = 0;
   for (int n = 0; n < ROW_SIZE; n++) {
     int unique_index = -1;
     for (int i = 0; i < ROW_SIZE; i++) {
-      if (puzzle[cell_indexes[i]] & (1 << n)) {
+      if (is_possibility(puzzle[cell_indexes[i]], n)) {
         if (unique_index == -1)
           unique_index = cell_indexes[i];
         else {
@@ -116,7 +129,7 @@ int rule_3(int puzzle[]) {
       int count = 0;
       int block_index = -1;
       for (int i = 0; i < ROW_SIZE; i++) {
-        if (puzzle[cell_indexes[i]] & (1 << n)) {
+        if (is_possibility(puzzle[cell_indexes[i]], n)) {
           ++count;
           int col = cell_indexes[i] % ROW_SIZE;
           int block_row = row / PUZZLE_SIZE;
@@ -134,10 +147,8 @@ int rule_3(int puzzle[]) {
         int *block_cells = get_block_cell_indexes(block_index);
         for (int i = 0; i < ROW_SIZE; i++) {
           int cell_row = block_cells[i] / ROW_SIZE;
-          if (cell_row != row && (puzzle[block_cells[i]] & (1 << n))) {
-            puzzle[block_cells[i]] &= ~(1 << n);
-            ++changes;
-          }
+          if (cell_row != row)
+            changes += remove_possibility(&puzzle[block_cells[i]], n);
         }
         free(block_cells);
       }
@@ -172,10 +183,8 @@ int rule_3(int puzzle[]) {
         int *block_cells = get_block_cell_indexes(block_index);
         for (int i = 0; i < ROW_SIZE; i++) {
           int cell_col = block_cells[i] % ROW_SIZE;
-          if (cell_col != col && (puzzle[block_cells[i]] & (1 << n))) {
-            puzzle[block_cells[i]] &= ~(1 << n);
-            ++changes;
-          }
+          if (cell_col != col)
+            changes += remove_possibility(&puzzle[block_cells[i]], n);
         }
         free(block_cells);
       }
