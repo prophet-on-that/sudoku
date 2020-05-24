@@ -106,6 +106,88 @@ int rule_2(int puzzle[]) {
   return 0;
 }
 
+int rule_3(int puzzle[]) {
+  int changes = 0;
+
+  /* Check rows */
+  for (int row = 0; row < ROW_SIZE; row++) {
+    int *cell_indexes = get_row_cell_indexes(row);
+    for (int n = 0; n < ROW_SIZE; n++) {
+      int count = 0;
+      int block_index = -1;
+      for (int i = 0; i < ROW_SIZE; i++) {
+        if (puzzle[cell_indexes[i]] & (1 << n)) {
+          ++count;
+          int col = cell_indexes[i] % ROW_SIZE;
+          int block_row = row / PUZZLE_SIZE;
+          int block_col = col / PUZZLE_SIZE;
+          int this_block_index = block_row * PUZZLE_SIZE + block_col;
+          if (block_index == -1)
+            block_index = this_block_index;
+          else if (block_index != this_block_index) {
+            block_index = -1;
+            break;
+          }
+        }
+      }
+      if (count > 1 && block_index != -1) {
+        int *block_cells = get_block_cell_indexes(block_index);
+        for (int i = 0; i < ROW_SIZE; i++) {
+          int cell_row = block_cells[i] / ROW_SIZE;
+          if (cell_row != row && (puzzle[block_cells[i]] & (1 << n))) {
+            puzzle[block_cells[i]] &= ~(1 << n);
+            ++changes;
+          }
+        }
+        free(block_cells);
+      }
+    }
+    free(cell_indexes);
+    if (changes)
+      return changes;
+  }
+
+  /* Check cols */
+  for (int col = 0; col < ROW_SIZE; col++) {
+    int *cell_indexes = get_col_cell_indexes(col);
+    for (int n = 0; n < ROW_SIZE; n++) {
+      int count = 0;
+      int block_index = -1;
+      for (int i = 0; i < ROW_SIZE; i++) {
+        if (puzzle[cell_indexes[i]] & (1 << n)) {
+          ++count;
+          int row = cell_indexes[i] / ROW_SIZE;
+          int block_row = row / PUZZLE_SIZE;
+          int block_col = col / PUZZLE_SIZE;
+          int this_block_index = block_row * PUZZLE_SIZE + block_col;
+          if (block_index == -1)
+            block_index = this_block_index;
+          else if (block_index != this_block_index) {
+            block_index = -1;
+            break;
+          }
+        }
+      }
+      if (count > 1 && block_index != -1) {
+        int *block_cells = get_block_cell_indexes(block_index);
+        for (int i = 0; i < ROW_SIZE; i++) {
+          int cell_col = block_cells[i] % ROW_SIZE;
+          if (cell_col != col && (puzzle[block_cells[i]] & (1 << n))) {
+            puzzle[block_cells[i]] &= ~(1 << n);
+            ++changes;
+          }
+        }
+        free(block_cells);
+      }
+    }
+    free(cell_indexes);
+    if (changes)
+      return changes;
+  }
+
+  return 0;
+}
+
 int solve(int puzzle[]) {
   while (1) {
     int changes = 0;
@@ -164,8 +246,11 @@ int solve(int puzzle[]) {
     if (changes == 0) {
       int rule_2_changes = rule_2(puzzle);
       if (rule_2_changes == 0) {
-        printf("Can't solve puzzle.\n");
-        return 1;
+        int rule_3_changes = rule_3(puzzle);
+        if (rule_3_changes == 0) {
+          printf("Can't solve puzzle.\n");
+          return 1;
+        }
       }
     }
   }
