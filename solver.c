@@ -86,6 +86,10 @@ int rule_2_check(int puzzle[], int cell_indexes[]) {
   return changes;
 }
 
+/*
+ * Identifies and fills numbers that only have one home in a row,
+ * column or block.
+ */
 int rule_2(int puzzle[]) {
   int changes = 0;
 
@@ -119,6 +123,10 @@ int rule_2(int puzzle[]) {
   return 0;
 }
 
+/*
+ * If a number can only exist within one block of a row or column,
+ * then exclude from the rest of the block.
+ */
 int rule_3(int puzzle[]) {
   int changes = 0;
 
