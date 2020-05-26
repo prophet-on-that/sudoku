@@ -274,52 +274,72 @@ int rule_4(int puzzle[]) {
   return 0;
 }
 
+int pigeonhole_check(int puzzle[], int cells[], int k) {
+  int changes = 0;
+
+  /* Ignore if there are not at least k cells with k or fewer
+     possibilities. */
+  int count = 0;
+  int possible_cells[ROW_SIZE];
+  for (int i = 0; i < ROW_SIZE; i++) {
+    int bit_count = set_bit_count(puzzle[cells[i]]);
+    if (bit_count > 1 && bit_count <= k)
+      possible_cells[count++] = cells[i];
+  }
+  if(count < k)
+    return 0;
+
+  /* Look at each subset of size k of possible cells. If
+     pigeonhole principle applies, remove those possibilities from
+     all other cells. */
+  int *subsets = comb(count, k);
+  for (int i = 0; i < choose(count, k); i++) {
+    int set_bits = 0;
+    for (int j = 0; j < k; j++)
+      set_bits |= puzzle[possible_cells[subsets[i * k + j]]];
+    if (set_bit_count(set_bits) == k) {
+      for (int j = 0; j < ROW_SIZE; j++) {
+        int cell = puzzle[cells[j]];
+        if ((cell | set_bits) != set_bits && (cell & set_bits)) {
+          puzzle[cells[j]] &= ~set_bits;
+          changes++;
+        }
+      }
+    }
+  }
+
+  free(subsets);
+
+  return changes;
+}
+
 /*
  * Pigeonhole principle.
  */
 int pigeonhole(int puzzle[]) {
   int changes = 0;
 
-  for (int k = 2; k < 1 + ROW_SIZE / 2; k++) {
+  for (int k = 2; k <= 1 + ROW_SIZE / 2; k++) {
     for (int row = 0; row < ROW_SIZE; row++) {
       int *cells = get_row_cell_indexes(row);
-
-      /* Ignore if there are not at least k cells with k or fewer
-         possibilities. */
-      int count = 0;
-      int possible_cells[ROW_SIZE];
-      for (int i = 0; i < ROW_SIZE; i++) {
-        int bit_count = set_bit_count(puzzle[cells[i]]);
-        if (bit_count > 1 && bit_count <= k)
-          possible_cells[count++] = cells[i];
-      }
-      if(count < k) {
-        free(cells);
-        continue;
-      }
-
-      /* Look at each subset of size k of possible cells. If
-         pigeonhole principle applies, remove those possibilities from
-         all other cells. */
-      int *subsets = comb(count, k);
-      for (int i = 0; i < choose(count, k); i++) {
-        int set_bits = 0;
-        for (int j = 0; j < k; j++)
-          set_bits |= puzzle[possible_cells[subsets[i * k + j]]];
-        if (set_bit_count(set_bits) == k) {
-          for (int j = 0; j < ROW_SIZE; j++) {
-            int cell = puzzle[cells[j]];
-            if ((cell | set_bits) != set_bits && (cell & set_bits)) {
-              puzzle[cells[j]] &= ~set_bits;
-              changes++;
-            }
-          }
-        }
-      }
-
-      free(subsets);
+      changes += pigeonhole_check(puzzle, cells, k);
       free(cells);
+      if (changes)
+        return changes;
+    }
 
+    for (int col = 0; col < ROW_SIZE; col++) {
+      int *cells = get_col_cell_indexes(col);
+      changes += pigeonhole_check(puzzle, cells, k);
+      free(cells);
+      if (changes)
+        return changes;
+    }
+
+    for (int block = 0; block < ROW_SIZE; block++) {
+      int *cells = get_block_cell_indexes(block);
+      changes += pigeonhole_check(puzzle, cells, k);
+      free(cells);
       if (changes)
         return changes;
     }
