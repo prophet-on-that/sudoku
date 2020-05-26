@@ -206,10 +206,78 @@ int rule_3(int puzzle[]) {
   return 0;
 }
 
+int get_block_from_cell(int cell) {
+  int row = cell / ROW_SIZE;
+  int col = cell % ROW_SIZE;
+  int block_row = row / PUZZLE_SIZE;
+  int block_col = col / PUZZLE_SIZE;
+  return block_row * PUZZLE_SIZE + block_col;
+}
+
+int rule_4(int puzzle[]) {
+  int changes = 0;
+
+  for (int block = 0; block < ROW_SIZE; block++) {
+    int *cells = get_block_cell_indexes(block);
+    for (int n = 0; n < ROW_SIZE; n++) {
+      int row = -1;
+      int col = -1;
+      int count = 0;
+      for (int i = 0; i < ROW_SIZE; i++) {
+        int cell = cells[i];
+        if (is_possibility(puzzle[cell], n)) {
+          count++;
+
+          int this_row = cell / ROW_SIZE;
+          if (row == -1)
+            row = this_row;
+          else if (row != -2 && row != this_row)
+            row = -2;
+
+          int this_col = cell % ROW_SIZE;
+          if (col == -1)
+            col = this_col;
+          else if (col != -2 && col != this_col)
+            col = -2;
+        }
+      }
+      if (count > 1) {
+        if (row >= 0) {
+          /* Exclude from row outside block */
+          int *row_cells = get_row_cell_indexes(row);
+          for (int i = 0; i < ROW_SIZE; i++) {
+            int cell = row_cells[i];
+            if (get_block_from_cell(cell) != block)
+              changes += remove_possibility(&puzzle[cell], n);
+          }
+          free(row_cells);
+        }
+
+        if (col >= 0) {
+          /* Exclude from col outside block */
+          int *col_cells = get_col_cell_indexes(col);
+          for (int i = 0; i < ROW_SIZE; i++) {
+            int cell = col_cells[i];
+            if (get_block_from_cell(cell) != block)
+              changes += remove_possibility(&puzzle[cell], n);
+          }
+          free(col_cells);
+        }
+      }
+    }
+    free(cells);
+
+    if (changes)
+      return changes;
+  }
+
+  return 0;
+}
+
 /*
  * Pigeonhole principle.
  */
-int rule_4(int puzzle[]) {
+int pigeonhole(int puzzle[]) {
   int changes = 0;
 
   for (int k = 2; k < 1 + ROW_SIZE / 2; k++) {
@@ -322,8 +390,11 @@ int solve(int puzzle[]) {
         if (rule_3_changes == 0) {
           int rule_4_changes = rule_4(puzzle);
           if (rule_4_changes == 0) {
-            printf("Can't solve puzzle.\n");
-            return 1;
+            int pigeonhole_changes = pigeonhole(puzzle);
+            if (pigeonhole_changes == 0) {
+              printf("Can't solve puzzle.\n");
+              return 1;
+            }
           }
         }
       }
