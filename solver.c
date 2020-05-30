@@ -36,6 +36,14 @@ int *get_col_cell_indexes(int col) {
   return ret;
 }
 
+int get_block_from_cell(int cell) {
+  int row = cell / ROW_SIZE;
+  int col = cell % ROW_SIZE;
+  int block_row = row / PUZZLE_SIZE;
+  int block_col = col / PUZZLE_SIZE;
+  return block_row * PUZZLE_SIZE + block_col;
+}
+
 /* Blocks are identified by [0, ROW_SIZE) */
 int *get_block_cell_indexes(int block) {
   int block_row = block / PUZZLE_SIZE;
@@ -170,6 +178,42 @@ int rule_2(int puzzle[]) {
   return 0;
 }
 
+int rule_3_check(int puzzle[], int cells[]) {
+  int changes = 0;
+  for (int n = 0; n < ROW_SIZE; n++) {
+    int count = 0;
+    int block_index = -1;
+    for (int i = 0; i < ROW_SIZE; i++) {
+      if (is_possibility(puzzle[cells[i]], n)) {
+        ++count;
+        int this_block_index = get_block_from_cell(cells[i]);
+        if (block_index == -1)
+          block_index = this_block_index;
+        else if (block_index != this_block_index) {
+          block_index = -1;
+          break;
+        }
+      }
+    }
+    if (count > 1 && block_index != -1) {
+      int *block_cells = get_block_cell_indexes(block_index);
+      for (int i = 0; i < ROW_SIZE; i++) {
+        /* Only consider blocks outside of the current row/column */
+        int exclude = 0;
+        for (int j = 0; j < ROW_SIZE; j++)
+          if (block_cells[i] == cells[j]) {
+            exclude = 1;
+            break;
+          }
+        if (!exclude)
+          changes += remove_possibility(&puzzle[block_cells[i]], n);
+      }
+      free(block_cells);
+    }
+  }
+  return changes;
+}
+
 /*
  * If a number can only exist within one block of a row or column,
  * then exclude from the rest of the block.
@@ -179,72 +223,18 @@ int rule_3(int puzzle[]) {
 
   /* Check rows */
   for (int row = 0; row < ROW_SIZE; row++) {
-    int *cell_indexes = get_row_cell_indexes(row);
-    for (int n = 0; n < ROW_SIZE; n++) {
-      int count = 0;
-      int block_index = -1;
-      for (int i = 0; i < ROW_SIZE; i++) {
-        if (is_possibility(puzzle[cell_indexes[i]], n)) {
-          ++count;
-          int col = cell_indexes[i] % ROW_SIZE;
-          int block_row = row / PUZZLE_SIZE;
-          int block_col = col / PUZZLE_SIZE;
-          int this_block_index = block_row * PUZZLE_SIZE + block_col;
-          if (block_index == -1)
-            block_index = this_block_index;
-          else if (block_index != this_block_index) {
-            block_index = -1;
-            break;
-          }
-        }
-      }
-      if (count > 1 && block_index != -1) {
-        int *block_cells = get_block_cell_indexes(block_index);
-        for (int i = 0; i < ROW_SIZE; i++) {
-          int cell_row = block_cells[i] / ROW_SIZE;
-          if (cell_row != row)
-            changes += remove_possibility(&puzzle[block_cells[i]], n);
-        }
-        free(block_cells);
-      }
-    }
-    free(cell_indexes);
+    int *cells = get_row_cell_indexes(row);
+    changes += rule_3_check(puzzle, cells);
+    free(cells);
     if (changes)
       return changes;
   }
 
   /* Check cols */
   for (int col = 0; col < ROW_SIZE; col++) {
-    int *cell_indexes = get_col_cell_indexes(col);
-    for (int n = 0; n < ROW_SIZE; n++) {
-      int count = 0;
-      int block_index = -1;
-      for (int i = 0; i < ROW_SIZE; i++) {
-        if (puzzle[cell_indexes[i]] & (1 << n)) {
-          ++count;
-          int row = cell_indexes[i] / ROW_SIZE;
-          int block_row = row / PUZZLE_SIZE;
-          int block_col = col / PUZZLE_SIZE;
-          int this_block_index = block_row * PUZZLE_SIZE + block_col;
-          if (block_index == -1)
-            block_index = this_block_index;
-          else if (block_index != this_block_index) {
-            block_index = -1;
-            break;
-          }
-        }
-      }
-      if (count > 1 && block_index != -1) {
-        int *block_cells = get_block_cell_indexes(block_index);
-        for (int i = 0; i < ROW_SIZE; i++) {
-          int cell_col = block_cells[i] % ROW_SIZE;
-          if (cell_col != col)
-            changes += remove_possibility(&puzzle[block_cells[i]], n);
-        }
-        free(block_cells);
-      }
-    }
-    free(cell_indexes);
+    int *cells = get_col_cell_indexes(col);
+    changes += rule_3_check(puzzle, cells);
+    free(cells);
     if (changes)
       return changes;
   }
@@ -252,14 +242,8 @@ int rule_3(int puzzle[]) {
   return 0;
 }
 
-int get_block_from_cell(int cell) {
-  int row = cell / ROW_SIZE;
-  int col = cell % ROW_SIZE;
-  int block_row = row / PUZZLE_SIZE;
-  int block_col = col / PUZZLE_SIZE;
-  return block_row * PUZZLE_SIZE + block_col;
-}
-
+/* If, in a block, a possibility only appears in a row or column of
+   that block, exclude it from the rest of the row or column.  */
 int rule_4(int puzzle[]) {
   int changes = 0;
 
