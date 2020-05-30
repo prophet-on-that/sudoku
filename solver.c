@@ -64,6 +64,52 @@ int remove_possibility(int *cell, int n) {
   return 0;
 }
 
+int rule_1_check(int puzzle[], int cell, int cells[]) {
+  int changes = 0;
+  for (int j = 0; j < ROW_SIZE; j++) {
+    int this_cell = cells[j];
+    if (this_cell == cell)
+      continue;
+    if (set_bit_count(puzzle[this_cell]) != 1)
+      continue;
+    int new = puzzle[cell] & ~puzzle[this_cell];
+    if (puzzle[cell] != new)
+      changes++;
+    puzzle[cell] = new;
+  }
+  return changes;
+}
+
+/* Remove possibilities based on known cells in rows, columns and
+   blocks. */
+int rule_1(int puzzle[]) {
+   int changes = 0;
+   for (int i = 0; i < PUZZLE_CELL_COUNT; i++) {
+     if (set_bit_count(puzzle[i]) > 1) {
+       /* Check along row */
+       int row = i / ROW_SIZE;
+       int *cells = get_row_cell_indexes(row);
+       changes += rule_1_check(puzzle, i, cells);
+       free(cells);
+
+       /* Check along column */
+       int col = i % ROW_SIZE;
+       cells = get_col_cell_indexes(col);
+       changes += rule_1_check(puzzle, i, cells);
+       free(cells);
+
+       /* Check blocks */
+       int block_row = row / PUZZLE_SIZE;
+       int block_col = col / PUZZLE_SIZE;
+       int block = block_row * PUZZLE_SIZE + block_col;
+       cells = get_block_cell_indexes(block);
+       changes += rule_1_check(puzzle, i, cells);
+       free(cells);
+     }
+   }
+   return changes;
+}
+
 /* Returns the number of changes made to cells in the given set. */
 int rule_2_check(int puzzle[], int cell_indexes[]) {
   int changes = 0;
@@ -350,55 +396,7 @@ int pigeonhole(int puzzle[]) {
 
 int solve(int puzzle[]) {
   while (1) {
-    int changes = 0;
-    for (int i = 0; i < PUZZLE_CELL_COUNT; i++) {
-      if (set_bit_count(puzzle[i]) > 1) {
-        /* Check along row */
-        int row = i / ROW_SIZE;
-        for (int j = row * ROW_SIZE; j < (row + 1) * ROW_SIZE; j++) {
-          if (j == i)
-            continue;
-          if (set_bit_count(puzzle[j]) != 1)
-            continue;
-          int new = puzzle[i] & ~puzzle[j];
-          if (puzzle[i] != new)
-            changes++;
-          puzzle[i] = new;
-        }
-
-        /* Check along column */
-        int col = i % ROW_SIZE;
-        for (int j = col; j < PUZZLE_CELL_COUNT; j += ROW_SIZE) {
-          if (j == i)
-            continue;
-          if (set_bit_count(puzzle[j]) != 1)
-            continue;
-          int new = puzzle[i] & ~puzzle[j];
-          if (puzzle[i] != new)
-            changes++;
-          puzzle[i] = new;
-        }
-
-        /* Check blocks */
-        int sq_row = row / PUZZLE_SIZE;
-        int sq_col = col / PUZZLE_SIZE;
-        for (int k = 0; k < PUZZLE_SIZE; k++) {
-          for (int l = 0; l < PUZZLE_SIZE; l++) {
-            int current_row = sq_row * PUZZLE_SIZE + k;
-            int current_col = sq_col * PUZZLE_SIZE + l;
-            int j = current_row * ROW_SIZE + current_col;
-            if (j == i)
-              continue;
-            if (set_bit_count(puzzle[j]) != 1)
-              continue;
-            int new = puzzle[i] & ~puzzle[j];
-            if (puzzle[i] != new)
-              changes++;
-            puzzle[i] = new;
-          }
-        }
-      }
-    }
+    int changes = rule_1(puzzle);
     if (is_solved(puzzle)) {
       printf("We've solved the puzzle!\n");
       return 0;
