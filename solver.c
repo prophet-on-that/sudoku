@@ -483,10 +483,10 @@ int solve(int puzzle[]) {
 
     /* Get possibilities for chosen cell. */
     int possibilities[ROW_SIZE];
-    int possibility_count = -1;
+    int possibility_count = 0;
     for (int i = 0; i < ROW_SIZE; i++) {
       if (puzzle[min_cell] & (1 << i))
-        possibilities[++possibility_count] = i;
+        possibilities[possibility_count++] = i;
     }
 
     /* Recursively call 'solve' assuming each possibility. */
