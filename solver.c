@@ -63,13 +63,26 @@ int is_possibility(int cell, int n) {
   return cell & (1 << n);
 }
 
-/* Returns 1 if possibility removed, 0 if already removed. */
+#define PUZZLE_ERROR -1
+
+/* Returns number of changes made (0 or 1), or PUZZLE_ERROR if change
+   led to error state. */
 int remove_possibility(int *cell, int n) {
   if (is_possibility(*cell, n)) {
     *cell &= ~(1 << n);
-    return 1;
+    return *cell ? 1 : PUZZLE_ERROR;
   }
   return 0;
+}
+
+/* Remove multiple possibilities, returning 1 or 0 depending on change
+   and PUZZLE_ERROR if the change leads to an inconsistent state.*/
+int mask_possibilities(int *cell, int mask) {
+  int old = *cell;
+  *cell &= ~mask;
+  if (!*cell)
+    return PUZZLE_ERROR;
+  return *cell != old ? 1 : 0;
 }
 
 int rule_1_check(int puzzle[], int cell, int cells[]) {
@@ -80,16 +93,17 @@ int rule_1_check(int puzzle[], int cell, int cells[]) {
       continue;
     if (set_bit_count(puzzle[this_cell]) != 1)
       continue;
-    int new = puzzle[cell] & ~puzzle[this_cell];
-    if (puzzle[cell] != new)
-      changes++;
-    puzzle[cell] = new;
+    int change = mask_possibilities(&puzzle[cell], puzzle[this_cell]);
+    if (change == PUZZLE_ERROR)
+      return PUZZLE_ERROR;
+    changes += change;
   }
   return changes;
 }
 
 /* Remove possibilities based on known cells in rows, columns and
-   blocks. */
+   blocks. Returns number of changes made, or PUZZLE_ERROR if
+   inconsistent state detected. */
 int rule_1(int puzzle[]) {
    int changes = 0;
    for (int i = 0; i < PUZZLE_CELL_COUNT; i++) {
@@ -97,28 +111,36 @@ int rule_1(int puzzle[]) {
        /* Check along row */
        int row = i / ROW_SIZE;
        int *cells = get_row_cell_indexes(row);
-       changes += rule_1_check(puzzle, i, cells);
+       int change = rule_1_check(puzzle, i, cells);
        free(cells);
+       if (change == PUZZLE_ERROR)
+         return PUZZLE_ERROR;
+       changes += change;
 
        /* Check along column */
        int col = i % ROW_SIZE;
        cells = get_col_cell_indexes(col);
-       changes += rule_1_check(puzzle, i, cells);
+       change = rule_1_check(puzzle, i, cells);
        free(cells);
+       if (change == PUZZLE_ERROR)
+         return PUZZLE_ERROR;
+       changes += change;
 
        /* Check blocks */
-       int block_row = row / PUZZLE_SIZE;
-       int block_col = col / PUZZLE_SIZE;
-       int block = block_row * PUZZLE_SIZE + block_col;
+       int block = get_block_from_cell(i);
        cells = get_block_cell_indexes(block);
-       changes += rule_1_check(puzzle, i, cells);
+       change = rule_1_check(puzzle, i, cells);
        free(cells);
+       if (change == PUZZLE_ERROR)
+         return PUZZLE_ERROR;
+       changes += change;
      }
    }
    return changes;
 }
 
-/* Returns the number of changes made to cells in the given set. */
+/* Returns the number of changes made to cells in the given
+   set. Returns number of changes made. */
 int rule_2_check(int puzzle[], int cell_indexes[]) {
   int changes = 0;
   for (int n = 0; n < ROW_SIZE; n++) {
@@ -143,7 +165,7 @@ int rule_2_check(int puzzle[], int cell_indexes[]) {
 
 /*
  * Identifies and fills numbers that only have one home in a row,
- * column or block.
+ * column or block. Returns number of changes made.
  */
 int rule_2(int puzzle[]) {
   int changes = 0;
@@ -178,6 +200,8 @@ int rule_2(int puzzle[]) {
   return 0;
 }
 
+/* Returns number of changes made, or PUZZLE_ERROR if an inconsistent
+   state is detected. */
 int rule_3_check(int puzzle[], int cells[]) {
   int changes = 0;
   for (int n = 0; n < ROW_SIZE; n++) {
@@ -205,8 +229,14 @@ int rule_3_check(int puzzle[], int cells[]) {
             exclude = 1;
             break;
           }
-        if (!exclude)
-          changes += remove_possibility(&puzzle[block_cells[i]], n);
+        if (!exclude) {
+          int change = remove_possibility(&puzzle[block_cells[i]], n);
+          if (change == PUZZLE_ERROR) {
+            free(block_cells);
+            return PUZZLE_ERROR;
+          }
+          changes += change;
+        }
       }
       free(block_cells);
     }
@@ -217,33 +247,39 @@ int rule_3_check(int puzzle[], int cells[]) {
 /*
  * If a number can only exist within one block of a row or column,
  * then exclude from the rest of the block.
+ *
+ * Returns number of changes made, or PUZZLE_ERROR if inconsistent
+ * state is detected.
  */
 int rule_3(int puzzle[]) {
-  int changes = 0;
-
   /* Check rows */
   for (int row = 0; row < ROW_SIZE; row++) {
     int *cells = get_row_cell_indexes(row);
-    changes += rule_3_check(puzzle, cells);
+    int changes = rule_3_check(puzzle, cells);
     free(cells);
-    if (changes)
+    if (changes != 0)
       return changes;
   }
 
   /* Check cols */
   for (int col = 0; col < ROW_SIZE; col++) {
     int *cells = get_col_cell_indexes(col);
-    changes += rule_3_check(puzzle, cells);
+    int changes = rule_3_check(puzzle, cells);
     free(cells);
-    if (changes)
+    if (changes != 0)
       return changes;
   }
 
   return 0;
 }
 
-/* If, in a block, a possibility only appears in a row or column of
-   that block, exclude it from the rest of the row or column.  */
+/*
+ * If, in a block, a possibility only appears in a row or column of
+ * that block, exclude it from the rest of the row or column.
+ *
+ * Returns the number of cells modified, or PUZZLE_ERROR on detection
+ * of an inconsistent state,
+ */
 int rule_4(int puzzle[]) {
   int changes = 0;
 
@@ -277,8 +313,15 @@ int rule_4(int puzzle[]) {
           int *row_cells = get_row_cell_indexes(row);
           for (int i = 0; i < ROW_SIZE; i++) {
             int cell = row_cells[i];
-            if (get_block_from_cell(cell) != block)
-              changes += remove_possibility(&puzzle[cell], n);
+            if (get_block_from_cell(cell) != block) {
+              int change = remove_possibility(&puzzle[cell], n);
+              if (change == PUZZLE_ERROR) {
+                free(row_cells);
+                free(cells);
+                return PUZZLE_ERROR;
+              }
+              changes += change;
+            }
           }
           free(row_cells);
         }
@@ -288,8 +331,15 @@ int rule_4(int puzzle[]) {
           int *col_cells = get_col_cell_indexes(col);
           for (int i = 0; i < ROW_SIZE; i++) {
             int cell = col_cells[i];
-            if (get_block_from_cell(cell) != block)
-              changes += remove_possibility(&puzzle[cell], n);
+            if (get_block_from_cell(cell) != block) {
+              int change = remove_possibility(&puzzle[cell], n);
+              if (change == PUZZLE_ERROR) {
+                free(col_cells);
+                free(cells);
+                return PUZZLE_ERROR;
+              }
+              changes += change;
+            }
           }
           free(col_cells);
         }
@@ -304,6 +354,8 @@ int rule_4(int puzzle[]) {
   return 0;
 }
 
+/* Returns number of changes made, or PUZZLE_ERROR if inconsistent
+   state detected. */
 int pigeonhole_check(int puzzle[], int cells[], int k) {
   int changes = 0;
 
@@ -331,8 +383,12 @@ int pigeonhole_check(int puzzle[], int cells[], int k) {
       for (int j = 0; j < ROW_SIZE; j++) {
         int cell = puzzle[cells[j]];
         if ((cell | set_bits) != set_bits && (cell & set_bits)) {
-          puzzle[cells[j]] &= ~set_bits;
-          changes++;
+          int change = mask_possibilities(&puzzle[cells[j]], set_bits);
+          if (change == PUZZLE_ERROR) {
+            free(subsets);
+            return PUZZLE_ERROR;
+          }
+          changes += change;
         }
       }
     }
@@ -344,33 +400,33 @@ int pigeonhole_check(int puzzle[], int cells[], int k) {
 }
 
 /*
- * Pigeonhole principle.
+ * Pigeonhole principle. Returns number of cells modified, or
+ * PUZZLE_ERROR if inconsistent state found.
  */
 int pigeonhole(int puzzle[]) {
-  int changes = 0;
-
+  int changes;
   for (int k = 2; k <= 1 + ROW_SIZE / 2; k++) {
     for (int row = 0; row < ROW_SIZE; row++) {
       int *cells = get_row_cell_indexes(row);
-      changes += pigeonhole_check(puzzle, cells, k);
+     changes = pigeonhole_check(puzzle, cells, k);
       free(cells);
-      if (changes)
+      if (changes != 0)
         return changes;
     }
 
     for (int col = 0; col < ROW_SIZE; col++) {
       int *cells = get_col_cell_indexes(col);
-      changes += pigeonhole_check(puzzle, cells, k);
+      changes = pigeonhole_check(puzzle, cells, k);
       free(cells);
-      if (changes)
+      if (changes != 0)
         return changes;
     }
 
     for (int block = 0; block < ROW_SIZE; block++) {
       int *cells = get_block_cell_indexes(block);
-      changes += pigeonhole_check(puzzle, cells, k);
+      changes = pigeonhole_check(puzzle, cells, k);
       free(cells);
-      if (changes)
+      if (changes != 0)
         return changes;
     }
   }
@@ -378,16 +434,24 @@ int pigeonhole(int puzzle[]) {
   return 0;
 }
 
+#define PUZZLE_SOLVED 0
+#define PUZZLE_INCOMPLETE 1
+
 int solve(int puzzle[]) {
   int (*rules[])(int []) = {&rule_1, &rule_2, &rule_3, &rule_4, &pigeonhole};
   while (1) {
     int changes = 0;
     if (is_solved(puzzle)) {
       printf("We've solved the puzzle!\n");
-      return 0;
+      return PUZZLE_SOLVED;
     }
     for (int i = 0; i < sizeof(rules) / sizeof(typeof(rules[0])); i++) {
       changes = rules[i](puzzle);
+      if (changes == PUZZLE_ERROR) {
+        /* TODO: raise inconsistent state error */
+        printf("Inconsistent puzzle state detected!\n");
+        return PUZZLE_ERROR;
+      }
       if (changes)
         break;
     }
@@ -396,7 +460,7 @@ int solve(int puzzle[]) {
     if (changes)
       continue;
     printf("Can't solve puzzle.\n");
-    return 1;
+    return PUZZLE_INCOMPLETE;
   }
 }
 
