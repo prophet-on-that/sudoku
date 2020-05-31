@@ -408,7 +408,7 @@ int pigeonhole(int puzzle[]) {
   for (int k = 2; k <= 1 + ROW_SIZE / 2; k++) {
     for (int row = 0; row < ROW_SIZE; row++) {
       int *cells = get_row_cell_indexes(row);
-     changes = pigeonhole_check(puzzle, cells, k);
+      changes = pigeonhole_check(puzzle, cells, k);
       free(cells);
       if (changes != 0)
         return changes;
