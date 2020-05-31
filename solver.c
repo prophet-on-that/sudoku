@@ -379,28 +379,24 @@ int pigeonhole(int puzzle[]) {
 }
 
 int solve(int puzzle[]) {
+  int (*rules[])(int []) = {&rule_1, &rule_2, &rule_3, &rule_4, &pigeonhole};
   while (1) {
-    int changes = rule_1(puzzle);
+    int changes = 0;
     if (is_solved(puzzle)) {
       printf("We've solved the puzzle!\n");
       return 0;
     }
-    if (changes == 0) {
-      int rule_2_changes = rule_2(puzzle);
-      if (rule_2_changes == 0) {
-        int rule_3_changes = rule_3(puzzle);
-        if (rule_3_changes == 0) {
-          int rule_4_changes = rule_4(puzzle);
-          if (rule_4_changes == 0) {
-            int pigeonhole_changes = pigeonhole(puzzle);
-            if (pigeonhole_changes == 0) {
-              printf("Can't solve puzzle.\n");
-              return 1;
-            }
-          }
-        }
-      }
+    for (int i = 0; i < sizeof(rules) / sizeof(typeof(rules[0])); i++) {
+      changes = rules[i](puzzle);
+      if (changes)
+        break;
     }
+    /* On any change, re-test for success and start again at first
+       rule. */
+    if (changes)
+      continue;
+    printf("Can't solve puzzle.\n");
+    return 1;
   }
 }
 
