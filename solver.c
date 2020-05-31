@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include "math.h"
 
 #define PUZZLE_SIZE 3
@@ -434,6 +435,21 @@ int pigeonhole(int puzzle[]) {
   return 0;
 }
 
+/* Find index of a cell with the lowest number of possibilities
+   greater than 1. PRE: puzzle has at least one unsolved cell. */
+int find_min_cell(int puzzle[]) {
+  int min_count = ROW_SIZE + 1;
+  int min_cell = -1;
+  for (int cell = 0; cell < PUZZLE_CELL_COUNT; cell++) {
+    int count = set_bit_count(puzzle[cell]);
+    if (count > 1 && count < min_count) {
+      min_count = count;
+      min_cell = cell;
+    }
+  }
+  return min_cell;
+}
+
 #define PUZZLE_SOLVED 0
 #define PUZZLE_INCOMPLETE 1
 
@@ -441,17 +457,14 @@ int solve(int puzzle[]) {
   int (*rules[])(int []) = {&rule_1, &rule_2, &rule_3, &rule_4, &pigeonhole};
   while (1) {
     int changes = 0;
-    if (is_solved(puzzle)) {
-      printf("We've solved the puzzle!\n");
+    if (is_solved(puzzle))
       return PUZZLE_SOLVED;
-    }
+
+    /* Apply each rule in turn. */
     for (int i = 0; i < sizeof(rules) / sizeof(typeof(rules[0])); i++) {
       changes = rules[i](puzzle);
-      if (changes == PUZZLE_ERROR) {
-        /* TODO: raise inconsistent state error */
-        printf("Inconsistent puzzle state detected!\n");
+      if (changes == PUZZLE_ERROR)
         return PUZZLE_ERROR;
-      }
       if (changes)
         break;
     }
@@ -459,7 +472,37 @@ int solve(int puzzle[]) {
        rule. */
     if (changes)
       continue;
-    printf("Can't solve puzzle.\n");
+
+    /* Guess the value of a cell and call 'solve' recursively. */
+
+    /* We choose the first unsolved cell with the least number of
+       possibilities. A better choice would be to use a cell in the
+       largest pigeonhole set made up of only two-possibility cells,
+       as this will yield the biggest change to the puzzle. */
+    int min_cell = find_min_cell(puzzle);
+
+    /* Get possibilities for chosen cell. */
+    int possibilities[ROW_SIZE];
+    int possibility_count = -1;
+    for (int i = 0; i < ROW_SIZE; i++) {
+      if (puzzle[min_cell] & (1 << i))
+        possibilities[++possibility_count] = i;
+    }
+
+    /* Recursively call 'solve' assuming each possibility. */
+    for (int i = 0; i < possibility_count; i++) {
+      /* Copy puzzle to new memory */
+      int puzzle_copy[PUZZLE_CELL_COUNT];
+      memcpy(puzzle_copy, puzzle, PUZZLE_CELL_COUNT * sizeof(int));
+      /* Set possibility i in min_cell */
+      puzzle_copy[min_cell] = 1 << possibilities[i];
+      int result = solve(puzzle_copy);
+      if (result == PUZZLE_SOLVED) {
+        memcpy(puzzle, puzzle_copy, PUZZLE_CELL_COUNT * sizeof(int));
+        return PUZZLE_SOLVED;
+      }
+    }
+
     return PUZZLE_INCOMPLETE;
   }
 }
@@ -513,6 +556,12 @@ int main(void) {
   }
 
   int ret = solve(puzzle);
+  if (ret == PUZZLE_SOLVED)
+    printf("Puzzle solved!\n");
+  else if (ret == PUZZLE_INCOMPLETE)
+    printf("Can't solve puzzle!\n");
+  else
+    printf("Inconsistent puzzle state detected!\n");
 
   print_puzzle(puzzle);
 
