@@ -3,4 +3,4 @@ solver: solver.c math.c
 
 .PHONY: test
 test: solver
-	set -e && for file in sudoku_*; do echo $$file && ./solver < $$file; done
+	set -e && for file in sudoku/sudoku_*; do echo $$file && ./solver < $$file; done
